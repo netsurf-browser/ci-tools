@@ -93,21 +93,21 @@ foreach my $repo (keys %repos) {
 
 # Step 3, prepare the tar
 
-`rm -rf netsurf-all-$vers{netsurf}`;
+`rm -rf netsurf-full-$vers{netsurf}`;
 
-`mkdir -p netsurf-all-$vers{netsurf}/src`;
+`mkdir -p netsurf-full-$vers{netsurf}/src`;
 
 foreach my $repo (keys %repos) {
    next if ($vers{$repo} eq '');
    print "Unpacking $repo\n";
    my $file = tarfile($repo);
-   system("cd netsurf-all-$vers{netsurf}/src; tar xzf ../../$file");
+   system("cd netsurf-full-$vers{netsurf}/src; tar xzf ../../$file");
 }
 
 # Step 4, prepare top level Makefile
 
 open INFILE, "<", "basis.mk";
-open OUTFILE, ">", "netsurf-all-$vers{netsurf}/Makefile";
+open OUTFILE, ">", "netsurf-full-$vers{netsurf}/Makefile";
 
 while (my $line = <INFILE>) {
    unless ($line =~ /^###([^#]+)###$/) {
@@ -139,5 +139,5 @@ close OUTFILE;
 close INFILE;
 
 print "Tarring it all up\n";
-`tar czf netsurf-all-$vers{netsurf}.tar.gz netsurf-all-$vers{netsurf}`;
+`tar czf netsurf-full-$vers{netsurf}.tar.gz netsurf-full-$vers{netsurf}`;
 
