@@ -11,6 +11,7 @@
 #       #   extra-packages: libjson-c-dev
 #       #   test: false
 #       #   toolchains: '["arm-riscos-gnueabi", "arm-unknown-riscos"]'
+#       #   extra-toolchain: arm-unknown-riscos
 
 name: "Library Build"
 
@@ -25,6 +26,13 @@ on:
         description: Run `make test` after the native builds.
         type: boolean
         default: true
+      extra-toolchain:
+        description: >
+          A cross toolchain (e.g. arm-unknown-riscos) to install in the jobs
+          that don't cross-compile, for libraries that need its headers
+          (e.g. librufl needs OSLib). HOST is not set; it is only installed.
+        type: string
+        default: ''
       cross:
         description: Run the cross-compilation builds.
         type: boolean
@@ -65,6 +73,12 @@ jobs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 1
+
+    - name: Install extra toolchain
+      if: inputs.extra-toolchain != ''
+      uses: netsurf-browser/ci-tools/.github/actions/install-toolchain@master
+      with:
+        toolchain: ${{ inputs.extra-toolchain }}
 
     - name: Setup
       uses: netsurf-browser/ci-tools/.github/actions/setup@master

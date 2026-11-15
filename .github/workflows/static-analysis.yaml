@@ -17,6 +17,7 @@
 #       #   extra-packages: libjson-c-dev
 #       #   make-tools: true
 #       #   env-sh: docs/env.sh
+#       #   extra-toolchain: arm-unknown-riscos
 #
 # ccache is deliberately not used: a cache hit skips the compiler, so CodeQL
 # and scan-build would not see that file. CCACHE is set empty because some
@@ -29,6 +30,13 @@ on:
     inputs:
       extra-packages:
         description: Extra apt packages the project needs, whitespace separated.
+        type: string
+        default: ''
+      extra-toolchain:
+        description: >
+          A cross toolchain (e.g. arm-unknown-riscos) to install in the jobs
+          that don't cross-compile, for libraries that need its headers
+          (e.g. librufl needs OSLib). HOST is not set; it is only installed.
         type: string
         default: ''
       make-tools:
@@ -58,6 +66,12 @@ jobs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 1
+
+    - name: Install extra toolchain
+      if: inputs.extra-toolchain != ''
+      uses: netsurf-browser/ci-tools/.github/actions/install-toolchain@master
+      with:
+        toolchain: ${{ inputs.extra-toolchain }}
 
     - name: Setup
       uses: netsurf-browser/ci-tools/.github/actions/setup@master
@@ -92,6 +106,12 @@ jobs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 1
+
+    - name: Install extra toolchain
+      if: inputs.extra-toolchain != ''
+      uses: netsurf-browser/ci-tools/.github/actions/install-toolchain@master
+      with:
+        toolchain: ${{ inputs.extra-toolchain }}
 
     - name: Setup
       uses: netsurf-browser/ci-tools/.github/actions/setup@master
