@@ -47,4 +47,3 @@ runs:
         rm "${TOOLCHAIN}.tar.gz"
         echo "Toolchain testament:"
         cat "/opt/netsurf/${TOOLCHAIN}/BUILD_INFO.txt"
-        "/opt/netsurf/${TOOLCHAIN}/cross/bin/${TOOLCHAIN}-gcc" --version
