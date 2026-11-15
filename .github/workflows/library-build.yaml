@@ -1,0 +1,127 @@
+# Reusable build workflow for NetSurf libraries.
+#
+# Usage, from a library's .github/workflows/build.yaml:
+#
+#   name: "Build"
+#   on: [push]
+#   jobs:
+#     build:
+#       uses: netsurf-browser/ci-tools/.github/workflows/library-build.yaml@master
+#       # with:
+#       #   extra-packages: libjson-c-dev
+#       #   test: false
+#       #   toolchains: '["arm-riscos-gnueabi", "arm-unknown-riscos"]'
+
+name: "Library Build"
+
+on:
+  workflow_call:
+    inputs:
+      extra-packages:
+        description: Extra apt packages the library needs, whitespace separated.
+        type: string
+        default: ''
+      test:
+        description: Run `make test` after the native builds.
+        type: boolean
+        default: true
+      cross:
+        description: Run the cross-compilation builds.
+        type: boolean
+        default: true
+      toolchains:
+        description: JSON list of cross toolchains to build with.
+        type: string
+        default: >-
+          [
+            "arm-riscos-gnueabi",
+            "arm-unknown-riscos",
+            "i686-w64-mingw32",
+            "m5475-atari-mint",
+            "m68k-atari-mint",
+            "m68k-unknown-amigaos",
+            "ppc-amigaos",
+            "x86_64-w64-mingw32"
+          ]
+
+jobs:
+  # Native linux builds
+  linux:
+    name: 'Linux: ${{ matrix.os }}: ${{ matrix.compiler }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - ubuntu-24.04
+        compiler: [gnu, llvm]  # See the setup action's compiler input.
+
+    env:
+      TARGET_WORKSPACE: "${{ github.workspace }}/projects"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 1
+
+    - name: Setup
+      uses: netsurf-browser/ci-tools/.github/actions/setup@master
+      with:
+        compiler: ${{ matrix.compiler }}
+        extra-packages: ${{ inputs.extra-packages }}
+
+    - name: Build Library
+      run: |
+          source projects/env.sh
+          make -j"$(nproc)"
+
+    - name: Unit Tests
+      if: inputs.test
+      run: |
+          source projects/env.sh
+          make test
+
+  # Cross compile using toolchains built in the toolchains repo.
+  cross:
+    if: inputs.cross
+    name: 'Cross: ${{ matrix.toolchain }}' # ATM toolchain unique across builds
+    runs-on: ubuntu-24.04 # Matches toolchains workflow
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: ${{ fromJSON(inputs.toolchains) }}
+
+    env:
+      HOST: ${{ matrix.toolchain }}
+      TARGET_WORKSPACE: "${{ github.workspace }}/projects"
+      Q: ""
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 1
+
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ github.job }}-${{ matrix.toolchain }}
+        max-size: 128M
+
+    - name: Install toolchain
+      uses: netsurf-browser/ci-tools/.github/actions/install-toolchain@master
+      with:
+        toolchain: ${{ matrix.toolchain }}
+
+    - name: Setup
+      uses: netsurf-browser/ci-tools/.github/actions/setup@master
+      with:
+        make-tools: true
+        extra-packages: ccache ${{ inputs.extra-packages }}
+
+    - name: Build Library
+      run: |
+          source projects/env.sh
+          make -j"$(nproc)"

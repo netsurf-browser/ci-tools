@@ -1,0 +1,103 @@
+name: NetSurf project setup
+description: >
+  Install build packages, fetch env.sh, then clone, build and install the
+  NetSurf libraries the calling project depends on, into $TARGET_WORKSPACE.
+
+  The job must set TARGET_WORKSPACE (normally the "projects" directory in
+  the GitHub workspace).
+  Set HOST in the job for cross builds; env.sh picks it up. For native
+  builds, the compiler input sets CC, CXX and AR for this and all later
+  steps.
+
+  Later steps use the result with `source projects/env.sh` (that is,
+  "$TARGET_WORKSPACE/env.sh").
+
+inputs:
+  extra-packages:
+    description: Whitespace separated apt packages to install as well as the defaults.
+    required: false
+    default: ''
+  env-sh:
+    description: >
+      Path, in the checked out repo, of an env.sh to use instead of
+      downloading netsurf's (e.g. docs/env.sh when building netsurf itself).
+      It is copied to $TARGET_WORKSPACE/env.sh.
+    required: false
+    default: ''
+  compiler:
+    description: >
+      Native compiler family: "gnu" (gcc, g++, ar) or "llvm" (clang,
+      clang++, llvm-ar). Exports CC, CXX and AR for the rest of the job.
+      Empty leaves them alone.
+    required: false
+    default: ''
+  make-tools:
+    description: Also build and install the host tools (ns-make-tools), such as nsgenbind.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Select compiler
+      if: inputs.compiler != ''
+      shell: bash
+      env:
+        COMPILER: ${{ inputs.compiler }}
+      run: |
+        # AR is always set explicitly: the NetSurf build system can't find
+        # LLVM AR on its own (it looks for it in /usr/lib instead of
+        # /usr/bin: `make: /usr/lib/llvm-ar: No such file or directory`).
+        case "$COMPILER" in
+        gnu)  printf '%s\n' CC=gcc   CXX=g++     AR=ar      >> "$GITHUB_ENV" ;;
+        llvm) printf '%s\n' CC=clang CXX=clang++ AR=llvm-ar >> "$GITHUB_ENV" ;;
+        *) echo "::error::Unknown compiler '$COMPILER' (expected gnu or llvm)"; exit 1 ;;
+        esac
+
+    - name: apt-get install packages
+      shell: bash
+      env:
+        EXTRA_PACKAGES: ${{ inputs.extra-packages }}
+      run: |
+        sudo apt-get update -qq
+        # shellcheck disable=SC2086 # word splitting of the package list is intended
+        sudo apt-get install --no-install-recommends -y \
+            bison \
+            build-essential \
+            check \
+            clang \
+            flex \
+            git \
+            gperf \
+            llvm \
+            pkg-config \
+            $EXTRA_PACKAGES
+
+    - name: Get env.sh
+      shell: bash
+      env:
+        ENV_SH: ${{ inputs.env-sh }}
+      run: |
+        mkdir -p "$TARGET_WORKSPACE"
+        if [ -n "$ENV_SH" ]; then
+            cp "$ENV_SH" "$TARGET_WORKSPACE/env.sh"
+        else
+            wget -O "$TARGET_WORKSPACE/env.sh" \
+                https://raw.githubusercontent.com/netsurf-browser/netsurf/refs/heads/master/docs/env.sh
+        fi
+
+    - name: Build and install project deps
+      shell: bash
+      env:
+        TARGET: ${{ github.event.repository.name }}
+        REPO_BASE_URI: https://github.com/netsurf-browser
+        MAKE_TOOLS: ${{ inputs.make-tools }}
+      run: |
+        set -e
+        source "$TARGET_WORKSPACE/env.sh"
+        # Use the deps' branch matching ours where one exists, else master.
+        ns-clone -d -s -b "$GITHUB_REF_NAME"
+        if [ "$MAKE_TOOLS" = true ]; then
+            ns-make-tools install
+        fi
+        ns-make-libs install

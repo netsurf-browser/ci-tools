@@ -1,0 +1,50 @@
+name: Install NetSurf cross toolchain
+description: >
+  Download a cross-compilation toolchain built by the netsurf-browser/toolchains
+  repo and install it under /opt/netsurf/<toolchain>. The toolchain release for
+  a branch of the same name as ours is used if there is one, otherwise master's.
+
+inputs:
+  toolchain:
+    description: Toolchain triplet, e.g. arm-riscos-gnueabi.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download toolchain
+      shell: bash
+      env:
+        TOOLCHAIN: ${{ inputs.toolchain }}
+      run: |
+        set -e
+
+        download_toolchain() {
+          local ref=$1
+          local url="https://github.com/netsurf-browser/toolchains/releases/download/${ref}/${TOOLCHAIN}.tar.gz"
+          echo "Trying toolchain ref: $ref ($url)"
+          curl -f -L -o "${TOOLCHAIN}.tar.gz" "$url"
+        }
+
+        safe_branch=$(echo "$GITHUB_REF_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g')
+
+        if download_toolchain "gh-${safe_branch}-unstable"; then
+          echo "Downloaded branch-specific toolchain"
+        elif download_toolchain "gh-master-unstable"; then
+          echo "Downloaded fallback master toolchain"
+        else
+          echo "Failed to download any toolchain variant"
+          exit 1
+        fi
+
+    - name: Install toolchain
+      shell: bash
+      env:
+        TOOLCHAIN: ${{ inputs.toolchain }}
+      run: |
+        set -e
+        sudo tar -xzf "${TOOLCHAIN}.tar.gz" -C /
+        rm "${TOOLCHAIN}.tar.gz"
+        echo "Toolchain testament:"
+        cat "/opt/netsurf/${TOOLCHAIN}/BUILD_INFO.txt"
+        "/opt/netsurf/${TOOLCHAIN}/cross/bin/${TOOLCHAIN}-gcc" --version
