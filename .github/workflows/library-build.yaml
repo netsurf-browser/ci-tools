@@ -9,7 +9,7 @@
 #       uses: netsurf-browser/ci-tools/.github/workflows/library-build.yaml@master
 #       # with:
 #       #   extra-packages: libjson-c-dev
-#       #   test: false
+#       #   test: one
 #       #   toolchains: '["arm-riscos-gnueabi", "arm-unknown-riscos"]'
 #       #   extra-toolchain: arm-unknown-riscos
 
@@ -23,9 +23,11 @@ on:
         type: string
         default: ''
       test:
-        description: Run `make test` after the native builds.
-        type: boolean
-        default: true
+        description: >
+          Where to run `make test`: "all" native builds, "one" (only gnu on
+          the newest Ubuntu; for slow test suites), or "none".
+        type: string
+        default: all
       extra-toolchain:
         description: >
           A cross toolchain (e.g. arm-unknown-riscos) to install in the jobs
@@ -69,6 +71,14 @@ jobs:
       TARGET_WORKSPACE: "${{ github.workspace }}/projects"
 
     steps:
+    - name: Check inputs
+      if: ${{ !contains(fromJSON('["all", "one", "none"]'), inputs.test) }}
+      env:
+        TEST: ${{ inputs.test }}
+      run: |
+          echo "::error::Invalid test input '$TEST' (expected all, one or none)"
+          exit 1
+
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
@@ -92,7 +102,9 @@ jobs:
           make -j"$(nproc)"
 
     - name: Unit Tests
-      if: inputs.test
+      if: >-
+        inputs.test == 'all' ||
+        (inputs.test == 'one' && matrix.compiler == 'gnu' && matrix.os == 'ubuntu-24.04')
       run: |
           source projects/env.sh || exit 1
           make test
